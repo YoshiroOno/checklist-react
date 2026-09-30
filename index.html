@@ -21,6 +21,13 @@
 <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
 <script type="module" src="src/main.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js')
+      .then(() => console.log('Service Worker registrado com sucesso!'))
+      .catch((err) => console.error('Erro ao registrar Service Worker:', err));
+  }
+</script>
 
 </body>
 </html>
