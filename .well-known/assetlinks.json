@@ -2,7 +2,7 @@
       "relation": ["delegate_permission/common.handle_all_urls"],
       "target": {
         "namespace": "android_app",
-        "package_name": "io.github.yoshiroono.twa",
-        "sha256_cert_fingerprints": ["34:61:FA:E0:E9:AE:05:07:E9:65:61:AC:36:3B:C8:1C:7A:CC:40:14:B0:7B:23:F5:D3:D0:02:3E:00:98:04:9A"]
+        "package_name": "com.yoshiro.checklist",
+        "sha256_cert_fingerprints": ["FD:C8:51:29:A6:3E:EC:F3:6E:E5:54:C5:90:13:51:66:95:3E:88:E0:0C:50:0E:20:39:CA:C5:37:59:73:BF:2A"]
       }
     }]
