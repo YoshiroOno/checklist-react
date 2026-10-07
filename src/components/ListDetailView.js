@@ -6,7 +6,7 @@ import { syncTask, syncList, pushPendingDeletes, syncAll } from "../lib/sync.js"
 import { finalizeList } from "../lib/tasks.js";
 import { useUi } from "../context/UiContext.js";
 import { TaskImage } from "./TaskImage.js";
-import { IconCamera, IconTrash } from "./Icons.js";
+import { IconCamera, IconTrash, IconEdit } from "./Icons.js";
 
 const React = window.React;
 const { useState, useEffect, useRef, useCallback } = React;
@@ -20,6 +20,8 @@ export function ListDetailView({ listId, isAdmin, onBack, onChanged, onResolve, 
   const [foto, setFoto] = useState(null);
   const [salvandoTarefa, setSalvandoTarefa] = useState(false);
   const [sincronizando, setSincronizando] = useState(false);
+  const [renomeando, setRenomeando] = useState(false);
+  const [novoNome, setNovoNome] = useState("");
   const fileRef = useRef(null);
 
   const carregar = useCallback(async () => {
@@ -129,6 +131,23 @@ export function ListDetailView({ listId, isAdmin, onBack, onChanged, onResolve, 
     if (onChanged) onChanged();
   }
 
+  function abrirRenomear() {
+    if (!isAdmin || !list) return;
+    setNovoNome(list.nome);
+    setRenomeando(true);
+  }
+
+  async function salvarNome() {
+    const nome = novoNome.trim();
+    if (!nome || !list) { setRenomeando(false); return; }
+    const listaAtualizada = { ...list, nome, sincronizado: false };
+    await dbPut("lists", listaAtualizada);
+    syncList(listaAtualizada);
+    setList(listaAtualizada);
+    setRenomeando(false);
+    if (onChanged) onChanged();
+  }
+
   async function excluirListaAtual() {
     if (!isAdmin || !list) return;
     const confirmado = confirm(`Excluir a lista "${list.nome}"? Ela e suas tarefas somem deste dispositivo e da planilha, para todo mundo.`);
@@ -219,7 +238,15 @@ export function ListDetailView({ listId, isAdmin, onBack, onChanged, onResolve, 
     <main>
       <div className="back-row">
         <button className="icon-btn" aria-label="Voltar" onClick=${onBack}>‹</button>
-        <h2>${list.nome}</h2>
+        ${renomeando ? html`
+          <input type="text" className="rename-input" value=${novoNome} autoFocus
+            onInput=${(e) => setNovoNome(e.target.value)}
+            onKeyDown=${(e) => { if (e.key === "Enter") salvarNome(); if (e.key === "Escape") setRenomeando(false); }} />
+          <button className="icon-btn" aria-label="Salvar nome" onClick=${salvarNome}>✓</button>
+        ` : html`
+          <h2>${list.nome}</h2>
+          ${isAdmin ? html`<button className="icon-btn" aria-label="Renomear lista" onClick=${abrirRenomear}><${IconEdit} /></button>` : null}
+        `}
       </div>
       <div className="detail-meta-row">
         <span className=${"status-badge " + list.status}>${list.status === "concluida" ? "concluída" : "aberta"}</span>
