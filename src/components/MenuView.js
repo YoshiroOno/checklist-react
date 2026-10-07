@@ -6,7 +6,7 @@ import { IconPlus, IconCheck } from "./Icons.js";
 const React = window.React;
 const { useState, useEffect, useCallback } = React;
 
-export function MenuView({ isAdmin, onCreate, onResolve, onOpenList, refreshKey }) {
+export function MenuView({ isAdmin, onCreate, onImport, onResolve, onOpenList, refreshKey }) {
   const [linhas, setLinhas] = useState(null); // null = carregando
 
   const carregar = useCallback(async () => {
@@ -48,6 +48,10 @@ export function MenuView({ isAdmin, onCreate, onResolve, onOpenList, refreshKey 
           <span className="hint">Passe pelas tarefas e confirme com uma foto</span>
         </button>
       </div>
+
+      ${isAdmin ? html`
+        <button className="btn btn-ghost" onClick=${onImport}>Importar lista de um PDF</button>
+      ` : null}
 
       <div className="section-label">LISTAS GERAIS</div>
       ${linhas === null ? html`<div className="empty">Carregando…</div>` :
