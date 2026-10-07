@@ -26,6 +26,22 @@ export function fileToCompressedDataURL(file, maxDim, quality) {
   });
 }
 
+// Mesma ideia da função acima, mas a partir de um canvas que já está em
+// memória (usado ao recortar a foto de dentro de uma página de PDF
+// importado) — não precisa reler arquivo nenhum.
+export function compressCanvas(sourceCanvas, maxDim, quality) {
+  maxDim = maxDim || 1280;
+  quality = quality || 0.72;
+  let width = sourceCanvas.width;
+  let height = sourceCanvas.height;
+  if (width > height && width > maxDim) { height = height * (maxDim / width); width = maxDim; }
+  else if (height > maxDim) { width = width * (maxDim / height); height = maxDim; }
+  const out = document.createElement("canvas");
+  out.width = width; out.height = height;
+  out.getContext("2d").drawImage(sourceCanvas, 0, 0, width, height);
+  return out.toDataURL("image/jpeg", quality);
+}
+
 /* ============================================================
    RESOLUÇÃO DE IMAGENS SINCRONIZADAS (vindas de outro dispositivo)
    Localmente, uma tarefa recém-criada já guarda a foto como base64
