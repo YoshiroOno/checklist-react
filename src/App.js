@@ -7,6 +7,7 @@ import { LoginScreen } from "./components/LoginScreen.js";
 import { Topbar } from "./components/Topbar.js";
 import { MenuView } from "./components/MenuView.js";
 import { CreateView } from "./components/CreateView.js";
+import { ImportPdfView } from "./components/ImportPdfView.js";
 import { ResolveSelectView } from "./components/ResolveSelectView.js";
 import { ResolveTaskView } from "./components/ResolveTaskView.js";
 import { ListDetailView } from "./components/ListDetailView.js";
@@ -67,6 +68,7 @@ function AppShell() {
           isAdmin=${admin}
           refreshKey=${refreshKey}
           onCreate=${() => setView("create")}
+          onImport=${() => setView("import-pdf")}
           onResolve=${() => setView("resolve-select")}
           onOpenList=${abrirLista}
         />
@@ -74,6 +76,10 @@ function AppShell() {
 
       ${view === "create" ? html`
         <${CreateView} onBack=${() => setView("menu")} onSaved=${() => { bumpRefresh(); setView("menu"); }} />
+      ` : null}
+
+      ${view === "import-pdf" ? html`
+        <${ImportPdfView} onBack=${() => setView("menu")} onSaved=${() => { bumpRefresh(); setView("menu"); }} />
       ` : null}
 
       ${view === "resolve-select" ? html`
