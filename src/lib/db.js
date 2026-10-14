@@ -58,6 +58,80 @@ export async function dbDelete(storeName, key) {
   });
 }
 
+// Lê e grava na MESMA transação: ninguém consegue alterar o registro entre a
+// leitura e a gravação. `mutador(atual)` recebe o registro atual (ou undefined
+// se não existir) e devolve o novo valor para gravar, ou null/undefined para
+// não mexer em nada. Usado para marcar "sincronizado" e para mesclar dados
+// vindos da planilha sem passar por cima de uma edição feita no meio tempo.
+export async function dbUpsert(storeName, key, mutador) {
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const t = db.transaction([storeName], "readwrite");
+    const store = t.objectStore(storeName);
+    const req = store.get(key);
+    req.onsuccess = () => {
+      const novo = mutador(req.result);
+      if (novo) store.put(novo);
+    };
+    t.oncomplete = () => resolve(true);
+    t.onerror = () => reject(t.error);
+  });
+}
+
+// Apaga um registro só se `predicado(atual)` for verdadeiro, checando e
+// apagando na mesma transação.
+export async function dbDeleteSe(storeName, key, predicado) {
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const t = db.transaction([storeName], "readwrite");
+    const store = t.objectStore(storeName);
+    const req = store.get(key);
+    req.onsuccess = () => {
+      if (req.result && predicado(req.result)) store.delete(key);
+    };
+    t.oncomplete = () => resolve(true);
+    t.onerror = () => reject(t.error);
+  });
+}
+
+// Devolve só os registros que passam no filtro, lendo um de cada vez — os
+// que não passam (e as fotos pesadas que carregam) não ficam na memória.
+export async function dbGetWhere(storeName, predicado) {
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const saida = [];
+    const t = db.transaction([storeName]);
+    const req = t.objectStore(storeName).openCursor();
+    req.onsuccess = () => {
+      const cur = req.result;
+      if (!cur) return;
+      if (predicado(cur.value)) saida.push(cur.value);
+      cur.continue();
+    };
+    t.oncomplete = () => resolve(saida);
+    t.onerror = () => reject(t.error);
+  });
+}
+
+// Lê todos os registros, mas guarda só uma versão enxuta de cada um
+// (`projecao`) — útil para conferir ids/flags sem carregar as fotos.
+export async function dbMapAll(storeName, projecao) {
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const saida = [];
+    const t = db.transaction([storeName]);
+    const req = t.objectStore(storeName).openCursor();
+    req.onsuccess = () => {
+      const cur = req.result;
+      if (!cur) return;
+      saida.push(projecao(cur.value));
+      cur.continue();
+    };
+    t.oncomplete = () => resolve(saida);
+    t.onerror = () => reject(t.error);
+  });
+}
+
 export async function dbGet(storeName, key) {
   const db = await getDB();
   return new Promise((resolve, reject) => {
