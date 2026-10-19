@@ -13,7 +13,7 @@ import { dbGet, dbPut, dbDelete, dbGetAll, dbUpsert, dbDeleteSe, dbGetWhere, dbM
    normalmente offline e você pode configurá-la depois pela tela
    de Configurações dentro do próprio app.
    ============================================================ */
-export const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyA5rR8ASTDuI7_S-9z5gwXYedAr4cV-nRICFIlWe_MGLMjtjr0LMxR5HfJpbUEjjmP/exec";
+export const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxwIIIjn8V6gOXpmtqLrPbuKRZYrXuG8pl_wTYzG5dsnR8Z7lQdv7xakofZ8Llai4Ej/exec";
 
 export async function getWebAppUrl() {
   if (WEB_APP_URL) return WEB_APP_URL; // definida diretamente no código — tem prioridade
