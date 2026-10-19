@@ -13,7 +13,7 @@ import { dbGet, dbPut, dbDelete, dbGetAll, dbUpsert, dbDeleteSe, dbGetWhere, dbM
    normalmente offline e você pode configurá-la depois pela tela
    de Configurações dentro do próprio app.
    ============================================================ */
-export const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxh4hInbyt9NmrMvAfIRh2iIq_mBp4nvkWL9ZWTmOjtkhwmRyhoENjrdpUWPCf4PRzm/exec";
+export const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyA5rR8ASTDuI7_S-9z5gwXYedAr4cV-nRICFIlWe_MGLMjtjr0LMxR5HfJpbUEjjmP/exec";
 
 export async function getWebAppUrl() {
   if (WEB_APP_URL) return WEB_APP_URL; // definida diretamente no código — tem prioridade
@@ -32,6 +32,63 @@ const emVoo = { listas: new Set(), tarefas: new Set(), exclusoes: new Set() };
 let envioEmAndamento = null;   // promessa da rodada de envio atual
 let repetirEnvio = false;      // alguém pediu envio enquanto a rodada rodava
 let cicloEmAndamento = null;   // promessa do ciclo (envio + busca) atual
+
+/* ============================================================
+   ABA "VISUALIZAR" DA PLANILHA
+   O servidor só a reconstrói quando o app pede (reconstruir a cada tarefa
+   recebida deixava tudo lento). O app pede depois de QUALQUER envio
+   bem-sucedido — inclusive os diretos, como resolver ou adicionar uma
+   tarefa, que não passam pela rodada de envio — esperando um instante para
+   juntar vários envios seguidos num pedido só.
+   ============================================================ */
+const ATRASO_VISUALIZAR_MS = 5000;
+let versaoVisualizar = 0;       // sobe a cada envio; detecta envio que chegou durante o pedido
+let timerVisualizar = null;
+let visualizarEmAndamento = false;
+
+function haEnvioEmCurso() {
+  return !!envioEmAndamento || emVoo.listas.size > 0 || emVoo.tarefas.size > 0 || emVoo.exclusoes.size > 0;
+}
+
+function marcarVisualizarDesatualizado() {
+  versaoVisualizar++;
+  // Fica gravado no aparelho: se o app for fechado antes do pedido sair, o
+  // próximo ciclo de sincronização faz o pedido.
+  dbPut("config", { key: "visualizarDesatualizado", value: true }).catch(() => {});
+  clearTimeout(timerVisualizar);
+  timerVisualizar = setTimeout(atualizarVisualizarSePreciso, ATRASO_VISUALIZAR_MS);
+}
+
+async function atualizarVisualizarSePreciso() {
+  clearTimeout(timerVisualizar);
+  timerVisualizar = null;
+  if (visualizarEmAndamento) return;
+  if (haEnvioEmCurso()) { // ainda enviando: espera terminar para pedir uma vez só
+    timerVisualizar = setTimeout(atualizarVisualizarSePreciso, ATRASO_VISUALIZAR_MS);
+    return;
+  }
+  const marcado = await dbGet("config", "visualizarDesatualizado");
+  if (!marcado) return;
+  visualizarEmAndamento = true;
+  try {
+    const versao = versaoVisualizar;
+    const r = await postToSheet({ tipo: "atualizarVisualizar" });
+    if (!r.ok) return; // continua marcado: tenta de novo no próximo ciclo
+    if (versao === versaoVisualizar) await dbDelete("config", "visualizarDesatualizado");
+    else marcarVisualizarDesatualizado(); // chegou envio novo durante o pedido: mais um
+  } finally {
+    visualizarEmAndamento = false;
+  }
+}
+
+// Uma vez por aparelho: a aba "Visualizar" pode estar desatualizada por causa
+// de resoluções enviadas antes desta correção. Força uma reconstrução.
+async function corrigirVisualizarAntigaUmaVez() {
+  const feito = await dbGet("config", "visualizarReconstruidaV2");
+  if (feito) return;
+  await dbPut("config", { key: "visualizarReconstruidaV2", value: true });
+  marcarVisualizarDesatualizado();
+}
 
 // Roda `fn` sobre os itens, com no máximo `limite` ao mesmo tempo.
 async function executarComLimite(itens, limite, fn) {
@@ -82,6 +139,7 @@ export async function syncList(list) {
       if (atual.nome !== list.nome || atual.status !== list.status) return null;
       return { ...atual, sincronizado: true, sincronizadoEm: Date.now() };
     });
+    marcarVisualizarDesatualizado(); // o nome da lista aparece na aba "Visualizar"
     return true;
   } finally {
     emVoo.listas.delete(list.id);
@@ -129,6 +187,7 @@ export async function syncTask(task) {
       }
       return novo;
     });
+    marcarVisualizarDesatualizado();
     return true;
   } finally {
     emVoo.tarefas.delete(task.id);
@@ -164,12 +223,10 @@ async function rodadaDeEnvio() {
   const idsTarefas = tarefasPendentes.filter((t) => !t.sincronizado).map((t) => t.id);
 
   let allOk = true;
-  let enviouAlgo = false;
 
   for (const l of listas) {
     const ok = await syncList(l);
     allOk = ok && allOk;
-    enviouAlgo = enviouAlgo || ok;
   }
 
   // 2 de cada vez: aproveita o tempo de upload da foto enquanto o servidor
@@ -179,17 +236,10 @@ async function rodadaDeEnvio() {
     if (!fresca || fresca.sincronizado) return;
     const ok = await syncTask(fresca);
     allOk = ok && allOk;
-    enviouAlgo = enviouAlgo || ok;
   });
 
-  const havia = (await dbGetAll("pendingDeletes")).length > 0;
   const exclusoesOk = await pushPendingDeletes();
   allOk = exclusoesOk && allOk;
-  if (havia && exclusoesOk) enviouAlgo = true;
-
-  // A aba "Visualizar" da planilha é reconstruída UMA vez por rodada (e não a
-  // cada tarefa, que era o que deixava tudo lento).
-  if (enviouAlgo) await postToSheet({ tipo: "atualizarVisualizar" });
   return allOk;
 }
 
@@ -208,8 +258,12 @@ export async function pushPendingDeletes() {
     try {
       const tipoRemoto = p.tipo === "tarefa" ? "excluirTarefa" : "excluirLista";
       const r = await postToSheet({ tipo: tipoRemoto, id: p.id });
-      if (r.ok) await dbDelete("pendingDeletes", p.id);
-      else allOk = false;
+      if (r.ok) {
+        await dbDelete("pendingDeletes", p.id);
+        marcarVisualizarDesatualizado();
+      } else {
+        allOk = false;
+      }
     } finally {
       emVoo.exclusoes.delete(p.id);
     }
@@ -349,6 +403,8 @@ export function syncCycle({ onStatus } = {}) {
     notify("sincronizando");
     const envioOk = await syncAll();
     const pullOk = await pullAll();
+    await corrigirVisualizarAntigaUmaVez();
+    await atualizarVisualizarSePreciso(); // pedido que ficou pendente (app fechado, falha de rede...)
     notify(pullOk && envioOk ? "sincronizado" : "pendente");
     return pullOk;
   })().finally(() => { cicloEmAndamento = null; });
