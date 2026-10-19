@@ -479,14 +479,15 @@
   .print-only{ display:none; }
   @media print{
     @page{ margin: 14mm; }
-    html, body{ background:#fff; }
-    body *{ visibility: hidden; }
-    #printSheet, #printSheet *{ visibility: visible; }
+    /* O app inteiro SAI do layout na impressão (display:none). Esconder só
+       com visibility deixava ele ocupando espaço, e o navegador gerava
+       páginas em branco do tamanho da tela que estava por trás. */
+    #root{ display:none !important; }
+    html, body{ height:auto !important; background:#fff; margin:0; padding:0; }
     #printSheet{
       display:block !important;
-      position:absolute;
-      left:0; top:0;
-      width:100%;
+      position:static;
+      width:auto;
       background:#fff;
       color:#111;
       font-family: var(--sans);
